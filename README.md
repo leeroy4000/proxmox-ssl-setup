@@ -1,6 +1,27 @@
 # Proxmox VE SSL/TLS Certificate Setup with Let's Encrypt & Cloudflare
 
-Complete guide for setting up trusted SSL certificates on Proxmox Virtual Environment using built-in ACME and Cloudflare DNS validation.
+**Automated SSL certificate management for Proxmox Virtual Environment using Let's Encrypt and Cloudflare DNS validation.**
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+## Why This Guide?
+
+By default, Proxmox uses a self-signed SSL certificate, which triggers browser security warnings and can't be verified. This guide eliminates those warnings by implementing trusted SSL certificates from Let's Encrypt that automatically renew.
+
+**Benefits:**
+- ✅ No more browser security warnings
+- ✅ Trusted certificates from Let's Encrypt
+- ✅ Automatic renewal every 60 days
+- ✅ DNS validation (no need to expose port 80)
+- ✅ Works behind firewalls and NAT
+
+**Use Cases:**
+- Home lab Proxmox servers accessed remotely
+- Small business virtualization environments  
+- Development/testing infrastructure
+- Any Proxmox installation requiring secure HTTPS access
+
+---
 
 ## Overview
 
@@ -9,6 +30,47 @@ This setup uses:
 - **Cloudflare DNS validation** to prove domain ownership
 - **Built-in ACME client** in Proxmox VE (version 6.1+)
 - **Automatic certificate renewal** every 60 days
+
+---
+
+## Quick Start
+
+### 1. Run Pre-Installation Checks
+
+```bash
+# Download the validator script
+wget https://raw.githubusercontent.com/leeroy4000/proxmox-ssl-setup/main/proxmox-ssl-validator.sh
+chmod +x proxmox-ssl-validator.sh
+
+# Run pre-checks
+sudo ./proxmox-ssl-validator.sh --pre-check
+```
+
+This validates:
+- Proxmox version compatibility
+- Internet connectivity
+- Cloudflare credentials
+- DNS configuration
+- Port accessibility
+
+### 2. Follow Setup Steps Below
+
+Complete Steps 1-7 in the manual setup section.
+
+### 3. Verify Installation
+
+```bash
+# Run post-installation checks
+sudo ./proxmox-ssl-validator.sh --post-check
+```
+
+This verifies:
+- Certificate installation
+- Certificate validity
+- Auto-renewal configuration
+- Web interface accessibility
+
+---
 
 ## Prerequisites
 
@@ -30,7 +92,7 @@ This setup uses:
    - **Permissions**: 
      - Zone → DNS → Edit
      - Zone → Zone → Read (recommended)
-   - **Zone Resources**:  Include → Specific zone → `yourdomain.com`
+   - **Zone Resources**: Include → Specific zone → `yourdomain.com`
 6. Click **Continue to summary** → **Create Token**
 7. **Copy the API token** (save it - you won't see it again!)
 
@@ -41,7 +103,7 @@ This setup uses:
 1. In **Cloudflare Dashboard**, click on your domain
 2. Go to **Overview** page
 3. Scroll down on the right side
-4. Copy the **Zone ID** (looks like:   `a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6`)
+4. Copy the **Zone ID** (looks like: `a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6`)
 5. Save this - you'll need it for Proxmox
 
 ---
@@ -52,11 +114,13 @@ This setup uses:
 2. Add new **A record**:
    - **Name**: `proxmox` (or `pve`, `hypervisor`, etc.)
    - **IPv4 address**: Your public IP address
-   - **Proxy status**:  Orange cloud **OFF** ⚪ (gray cloud)
+   - **Proxy status**: Orange cloud **OFF** ⚪ (gray cloud)
    - **TTL**: Auto
 3. Click **Save**
 
-Result:   `proxmox.yourdomain.com`
+Result: `proxmox.yourdomain.com`
+
+> **Important**: Disable Cloudflare proxy (gray cloud) for Proxmox. The orange cloud (proxy enabled) will break the connection.
 
 ---
 
@@ -82,7 +146,7 @@ Result:   `proxmox.yourdomain.com`
 2. Switch to **Challenge Plugins** tab
 3. Click **Add**
 4. Configure plugin:
-   - **Plugin ID**:  `cloudflare`
+   - **Plugin ID**: `cloudflare`
    - **DNS API**: `Cloudflare Managed DNS` (or `dns_cf`)
    - **API Data**: Enter in this format:
      ```
@@ -100,9 +164,9 @@ Result:   `proxmox.yourdomain.com`
 2. Go to **System** → **Certificates**
 3. Click **Add** button under "ACME"
 4. Configure domain:
-   - **Challenge Type**:  `DNS`
+   - **Challenge Type**: `DNS`
    - **Plugin**: `cloudflare` (select from dropdown)
-   - **Domain**: `proxmox.yourdomain. com` (your full subdomain)
+   - **Domain**: `proxmox.yourdomain.com` (your full subdomain)
 5. Click **Add**
 
 ---
@@ -120,7 +184,7 @@ Result:   `proxmox.yourdomain.com`
 ## Step 8: Verify HTTPS Works
 
 1. **Close browser completely** (clear cache)
-2. Navigate to:  `https://proxmox.yourdomain.com:8006`
+2. Navigate to: `https://proxmox.yourdomain.com:8006`
 3. Should see:  
    - ✅ Secure lock icon
    - ✅ Valid certificate from Let's Encrypt
@@ -129,6 +193,48 @@ Result:   `proxmox.yourdomain.com`
    - **Issued to**: proxmox.yourdomain.com
    - **Issued by**: Let's Encrypt (R10, R11, or similar)
    - **Valid until**: ~90 days from issue date
+
+**Or use the validator:**
+```bash
+sudo ./proxmox-ssl-validator.sh --post-check
+```
+
+---
+
+## Validation Script Features
+
+The included `proxmox-ssl-validator.sh` script provides comprehensive validation:
+
+### Pre-Installation Mode (`--pre-check`)
+- Verifies Proxmox version supports ACME
+- Tests internet connectivity to Let's Encrypt
+- Validates Cloudflare API credentials
+- Checks DNS record configuration
+- Verifies port 8006 accessibility
+
+### Post-Installation Mode (`--post-check`)
+- Confirms certificate installation
+- Verifies certificate validity via HTTPS
+- Checks certificate issuer (Let's Encrypt)
+- Validates domain name match
+- Tests auto-renewal configuration
+- Confirms web interface accessibility
+
+### Usage Examples
+
+```bash
+# Before setup - check prerequisites
+./proxmox-ssl-validator.sh --pre-check
+
+# After certificate installation - verify everything works
+./proxmox-ssl-validator.sh --post-check
+
+# Run complete validation (both modes)
+./proxmox-ssl-validator.sh --full
+
+# Show help
+./proxmox-ssl-validator.sh --help
+```
 
 ---
 
@@ -149,6 +255,11 @@ If you need to renew manually:
 - **Node** → **System** → **Certificates**
 - Shows current certificate and expiration date
 
+Or use command line:
+```bash
+pvenode cert info
+```
+
 ---
 
 ## Cluster Configuration (Multiple Nodes)
@@ -159,7 +270,7 @@ If you have a Proxmox cluster with multiple nodes:
 Each node gets its own subdomain and certificate: 
 - `pve1.yourdomain.com` → Node 1
 - `pve2.yourdomain.com` → Node 2
-- `pve3.yourdomain. com` → Node 3
+- `pve3.yourdomain.com` → Node 3
 
 Repeat Steps 3-7 for each node.
 
@@ -175,7 +286,7 @@ One certificate with multiple domains:
 
 ### Error: "invalid domain" or "Error add txt for domain"
 
-**Problem**:  Missing Zone ID or incorrect API token
+**Problem**: Missing Zone ID or incorrect API token
 
 **Solution**: 
 1. Verify you added **both** `CF_Token` AND `CF_Zone_ID` to the plugin
@@ -185,7 +296,13 @@ One certificate with multiple domains:
    CF_Zone_ID=your_zone_id
    ```
 3. Verify API token has correct permissions (Zone → DNS → Edit)
-4. Edit plugin:  **Datacenter** → **ACME** → **Challenge Plugins** → **Edit**
+4. Edit plugin: **Datacenter** → **ACME** → **Challenge Plugins** → **Edit**
+
+**Quick validation:**
+```bash
+./proxmox-ssl-validator.sh --pre-check
+```
+This will test your Cloudflare credentials before you configure Proxmox.
 
 ### Certificate not showing as valid in browser
 
@@ -193,7 +310,7 @@ One certificate with multiple domains:
 
 **Solution**: 
 - Close browser completely and reopen
-- Hard refresh:   `Ctrl + Shift + R` (Windows/Linux) or `Cmd + Shift + R` (Mac)
+- Hard refresh: `Ctrl + Shift + R` (Windows/Linux) or `Cmd + Shift + R` (Mac)
 - Try incognito/private window
 - Try different browser
 - Clear browser SSL state
@@ -203,20 +320,30 @@ One certificate with multiple domains:
 **Problem**: DNS not resolving or firewall blocking
 
 **Solution**:
-- Can still access via IP:  `https://PROXMOX_IP:8006` (certificate warning is normal)
-- Check DNS resolves:  `nslookup proxmox.yourdomain.com`
+- Can still access via IP: `https://PROXMOX_IP:8006` (certificate warning is normal)
+- Check DNS resolves: `nslookup proxmox.yourdomain.com`
 - Verify port 8006 is open (if accessing from outside network)
 - Check pfSense firewall rules if accessing through VPN
+
+**Automated check:**
+```bash
+./proxmox-ssl-validator.sh --post-check
+```
 
 ### ACME order fails immediately
 
 **Problem**: Proxmox can't reach Let's Encrypt servers
 
 **Solution**:
-- Check Proxmox has internet access:  `ping 8.8.8.8` from shell
+- Check Proxmox has internet access: `ping 8.8.8.8` from shell
 - Check DNS resolution: `ping letsencrypt.org`
 - Verify firewall allows outbound HTTPS (port 443)
 - Check proxy settings if using one
+
+**Automated check:**
+```bash
+./proxmox-ssl-validator.sh --pre-check
+```
 
 ### API token permissions error
 
@@ -241,7 +368,7 @@ One certificate with multiple domains:
 
 ### Port Forwarding
 Only forward port 8006 if you need external access:
-- Better:  Use **VPN** and access over private network
+- Better: Use **VPN** and access over private network
 - Alternative: Use **reverse proxy** (Caddy, nginx) on port 443
 
 ### Certificate Security
@@ -278,7 +405,7 @@ proxmox.yourdomain.com {
 }
 ```
 
-Then access via:  `https://proxmox.yourdomain.com` (no port number!)
+Then access via: `https://proxmox.yourdomain.com` (no port number!)
 
 ---
 
@@ -311,14 +438,93 @@ curl -X GET "https://api.cloudflare.com/client/v4/zones?name=yourdomain.com" \
   -H "Content-Type: application/json"
 ```
 
+### Run validation script:
+```bash
+# Pre-installation checks
+./proxmox-ssl-validator.sh --pre-check
+
+# Post-installation verification
+./proxmox-ssl-validator.sh --post-check
+```
+
 ---
 
-## Summary
+## Architecture Diagram
 
-✅ **Proxmox now has valid SSL certificate from Let's Encrypt**  
-✅ **Auto-renewal every 60 days (30 days before expiry)**  
-✅ **DNS validation via Cloudflare (no ports to open)**  
-✅ **Secure access to Proxmox web interface**  
+```
+┌─────────────────┐
+│   Your Browser  │
+└────────┬────────┘
+         │ HTTPS (Port 8006)
+         │
+         ▼
+┌─────────────────┐      DNS Query       ┌──────────────┐
+│   Cloudflare    │◄────────────────────►│ DNS Resolver │
+│   DNS Server    │                      └──────────────┘
+└────────┬────────┘
+         │ Resolves to Proxmox IP
+         │
+         ▼
+┌─────────────────────────────────────────┐
+│         Proxmox VE Server               │
+│  ┌───────────────────────────────────┐  │
+│  │  Built-in ACME Client             │  │
+│  │  • Requests cert from Let's Enc.  │  │
+│  │  • Uses Cloudflare DNS validation │  │
+│  │  • Auto-renews every 60 days      │  │
+│  └───────────────────────────────────┘  │
+│  ┌───────────────────────────────────┐  │
+│  │  SSL Certificate (Let's Encrypt)  │  │
+│  │  • Trusted by all browsers        │  │
+│  │  • 90-day validity                │  │
+│  │  • Stored in /etc/pve/            │  │
+│  └───────────────────────────────────┘  │
+└─────────────────────────────────────────┘
+         ▲
+         │ ACME Challenge
+         │
+┌────────┴────────┐
+│  Let's Encrypt  │
+│  CA Servers     │
+└─────────────────┘
+```
+
+---
+
+## Project Background
+
+This setup was developed for my home lab environment running Proxmox VE on multiple nodes. The goal was to eliminate browser security warnings while maintaining secure access via VPN and ensuring certificates automatically renew.
+
+**Environment:**
+- 3-node Proxmox cluster
+- pfSense firewall with site-to-site VPN
+- Cloudflare-managed domains
+- Remote access via WireGuard VPN
+
+The validation script was added to ensure reliable certificate deployment and to catch configuration issues early in the setup process.
+
+---
+
+## Files in This Repository
+
+- `README.md` - This comprehensive setup guide
+- `proxmox-ssl-validator.sh` - Automated validation script
+  - Pre-installation checks
+  - Post-installation verification
+  - Certificate validation
+  - Auto-renewal testing
+
+---
+
+## Contributing
+
+Issues and pull requests welcome! If you find bugs or have suggestions for improving the setup process or validation script, please open an issue.
+
+---
+
+## License
+
+MIT License - Feel free to use and modify for your own projects.
 
 ---
 
@@ -327,9 +533,20 @@ curl -X GET "https://api.cloudflare.com/client/v4/zones?name=yourdomain.com" \
 - **Proxmox Wiki**: https://pve.proxmox.com/wiki/Certificate_Management
 - **Let's Encrypt**: https://letsencrypt.org/
 - **Cloudflare API Docs**: https://developers.cloudflare.com/api/
+- **ACME Protocol**: https://tools.ietf.org/html/rfc8555
 
 ---
 
-**Setup Date**: 2026-01-11  
-**Domain Used**: proxmox.playwithmatches.us (update with your domain)  
-**Proxmox Version**: (add your version here)
+## Summary
+
+✅ **Proxmox now has valid SSL certificate from Let's Encrypt**  
+✅ **Auto-renewal every 60 days (30 days before expiry)**  
+✅ **DNS validation via Cloudflare (no ports to open)**  
+✅ **Secure access to Proxmox web interface**  
+✅ **Automated validation and verification**
+
+---
+
+**Last Updated**: January 2026  
+**Tested On**: Proxmox VE 7.x, 8.x  
+**Author**: Lee Roy
