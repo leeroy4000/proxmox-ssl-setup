@@ -33,35 +33,121 @@ This setup uses:
 
 ---
 
-## Quick Start
+## Getting Started
 
-### 1. Run Pre-Installation Checks
+### First Time? Start Here
+
+**What you'll need:**
+- A computer to connect from (Windows, Mac, or Linux)
+- Your Proxmox server's IP address
+- Root password for Proxmox
+
+### Step 1: Connect to Your Proxmox Server via SSH
+
+#### On Windows:
+1. Open **PowerShell** or download **PuTTY**
+2. If using PowerShell, type:
+   ```powershell
+   ssh root@YOUR_PROXMOX_IP
+   ```
+   Replace `YOUR_PROXMOX_IP` with your actual Proxmox IP (e.g., `192.168.1.100`)
+3. When prompted "Are you sure you want to continue connecting?", type `yes`
+4. Enter your root password when prompted
+
+#### On Mac or Linux:
+1. Open **Terminal**
+2. Type:
+   ```bash
+   ssh root@YOUR_PROXMOX_IP
+   ```
+   Replace `YOUR_PROXMOX_IP` with your actual Proxmox IP (e.g., `192.168.1.100`)
+3. When prompted "Are you sure you want to continue connecting?", type `yes`
+4. Enter your root password when prompted
+
+**How to find your Proxmox IP:**
+- Log into the Proxmox web interface
+- Look at the URL bar - it's the part before `:8006`
+- Or click on your node name → System → Network
+
+**You're connected when you see:**
+```
+root@pve:~#
+```
+
+### Step 2: Download and Run the Validator
+
+Now that you're connected via SSH, copy and paste these commands:
 
 ```bash
 # Download the validator script
 wget https://raw.githubusercontent.com/leeroy4000/proxmox-ssl-setup/main/proxmox-ssl-validator.sh
+
+# Make it executable
 chmod +x proxmox-ssl-validator.sh
 
-# Run pre-checks
-sudo ./proxmox-ssl-validator.sh --pre-check
+# Run pre-installation checks
+./proxmox-ssl-validator.sh --pre-check
+```
+
+**What these commands do:**
+- `wget` downloads the script from GitHub
+- `chmod +x` makes the script executable (runnable)
+- `./proxmox-ssl-validator.sh --pre-check` runs the validation
+
+The script will ask you for:
+- Your Cloudflare API Token (from Step 1 below)
+- Your Cloudflare Zone ID (from Step 2 below)
+- Your domain name (e.g., `example.com`)
+- Your Proxmox subdomain (e.g., `proxmox.example.com`)
+
+---
+
+## Quick Start
+
+### Overview of the Process
+
+1. **Connect to Proxmox** (via SSH - see "Getting Started" above)
+2. **Run pre-checks** to validate your setup is ready
+3. **Get Cloudflare credentials** (API token and Zone ID)
+4. **Create DNS record** for your Proxmox server
+5. **Configure certificates in Proxmox web interface** (GUI steps)
+6. **Run post-checks** to verify everything works
+
+### 1. Connect and Run Pre-Checks
+
+**First time?** See the "Getting Started" section above for detailed SSH instructions.
+
+**Already connected via SSH?** Run:
+
+```bash
+./proxmox-ssl-validator.sh --pre-check
 ```
 
 This validates:
 - Proxmox version compatibility
 - Internet connectivity
-- Cloudflare credentials
+- Cloudflare credentials (you'll need these from steps below)
 - DNS configuration
 - Port accessibility
 
-### 2. Follow Setup Steps Below
+### 2. Get Your Cloudflare Credentials
 
-Complete Steps 1-7 in the manual setup section.
+You'll need these for the pre-check script and for Proxmox configuration.
 
-### 3. Verify Installation
+**See Steps 1-2 in the detailed setup below** for how to get:
+- Cloudflare API Token
+- Cloudflare Zone ID
+
+### 3. Follow the Manual Setup Steps
+
+Complete **Steps 1-7** in the "Manual Setup" section below (using the Proxmox web interface).
+
+### 4. Verify Installation
+
+**Connect to Proxmox via SSH again** and run:
 
 ```bash
-# Run post-installation checks
-sudo ./proxmox-ssl-validator.sh --post-check
+./proxmox-ssl-validator.sh --post-check
 ```
 
 This verifies:
@@ -82,7 +168,12 @@ This verifies:
 
 ---
 
-## Step 1: Get Cloudflare API Token
+## Manual Setup (Detailed Steps)
+
+The following steps are performed in the **Proxmox web interface** (not SSH).  
+Access it by opening a browser and going to: `https://YOUR_PROXMOX_IP:8006`
+
+### Step 1: Get Cloudflare API Token
 
 1. Log into **Cloudflare Dashboard**
 2. Go to **My Profile** → **API Tokens**
@@ -183,6 +274,8 @@ Result: `proxmox.yourdomain.com`
 
 ## Step 8: Verify HTTPS Works
 
+### Option 1: Browser Test
+
 1. **Close browser completely** (clear cache)
 2. Navigate to: `https://proxmox.yourdomain.com:8006`
 3. Should see:  
@@ -194,10 +287,21 @@ Result: `proxmox.yourdomain.com`
    - **Issued by**: Let's Encrypt (R10, R11, or similar)
    - **Valid until**: ~90 days from issue date
 
-**Or use the validator:**
+### Option 2: Automated Validation (Recommended)
+
+**Connect to Proxmox via SSH** (see "Getting Started" section) and run:
+
 ```bash
-sudo ./proxmox-ssl-validator.sh --post-check
+./proxmox-ssl-validator.sh --post-check
 ```
+
+This will comprehensively test:
+- Certificate installation
+- Certificate validity
+- Let's Encrypt issuer
+- Domain name match
+- Auto-renewal configuration
+- HTTPS accessibility
 
 ---
 
