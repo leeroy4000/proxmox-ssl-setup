@@ -631,7 +631,7 @@ This setup was developed for my home lab environment running Proxmox VE on multi
 - 3-node Proxmox cluster
 - pfSense firewall with site-to-site VPN
 - Cloudflare-managed domains
-- Remote access via WireGuard VPN
+- Remote access via OpenVPN
 
 The validation script was added to ensure reliable certificate deployment and to catch configuration issues early in the setup process.
 
@@ -678,7 +678,3 @@ MIT License - Feel free to use and modify for your own projects.
 ✅ **Automated validation and verification**
 
 ---
-
-**Last Updated**: January 2026  
-**Tested On**: Proxmox VE 7.x, 8.x  
-**Author**: Lee Roy
