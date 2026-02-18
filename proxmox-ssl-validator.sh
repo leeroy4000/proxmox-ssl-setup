@@ -70,8 +70,36 @@ check_proxmox_version() {
         return 1
     fi
     
-    local pve_version=$(pveversion | grep "pve-manager" | awk '{print $2}' | cut -d'/' -f1)
-    local major_version=$(echo $pve_version | cut -d'.' -f1)
+    # Get the full pveversion output
+    local pve_output=$(pveversion 2>/dev/null)
+    
+    # Parse: "pve-manager/9.1.1/42db4a6cf33dac83 (running kernel: 6.17.2-1-pve)"
+    # Extract version between / and next /
+    local pve_version=$(echo "$pve_output" | grep -oP 'pve-manager/\K[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+    
+    # If that didn't work, try other patterns
+    if [ -z "$pve_version" ]; then
+        pve_version=$(echo "$pve_output" | grep -oP '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+    fi
+    
+    # Check if we got a version
+    if [ -z "$pve_version" ]; then
+        print_warning "Could not parse Proxmox version from output:"
+        print_info "$pve_output"
+        print_info "Assuming version is compatible (6.1+)"
+        return 0
+    fi
+    
+    # Extract major version number
+    local major_version=$(echo "$pve_version" | cut -d'.' -f1)
+    
+    # Validate we got a number
+    if ! [[ "$major_version" =~ ^[0-9]+$ ]]; then
+        print_warning "Could not determine major version number"
+        print_info "Version string: $pve_version"
+        print_info "Assuming version is compatible (6.1+)"
+        return 0
+    fi
     
     if [ "$major_version" -ge 6 ]; then
         print_success "Proxmox VE version: $pve_version (ACME support: YES)"
@@ -95,19 +123,29 @@ check_internet_connectivity() {
     
     # Test DNS resolution
     if ping -c 2 letsencrypt.org &> /dev/null; then
-        print_success "DNS resolution: OK"
+        print_success "DNS resolution: OK (letsencrypt.org reachable)"
     else
-        print_error "DNS resolution failed (cannot reach letsencrypt.org)"
-        return 1
+        print_warning "Cannot ping letsencrypt.org"
+        print_info "This may be normal - some networks block ICMP ping"
+        
+        # Try a different test - resolve DNS
+        if nslookup letsencrypt.org &> /dev/null || host letsencrypt.org &> /dev/null; then
+            print_success "DNS resolution: OK (domain resolves)"
+        else
+            print_warning "DNS lookup failed, but this may not be an issue"
+        fi
     fi
     
     # Test HTTPS connectivity to Let's Encrypt
+    print_info "Testing HTTPS access to Let's Encrypt API..."
     if curl -s --connect-timeout 5 https://acme-v02.api.letsencrypt.org/directory &> /dev/null; then
         print_success "Let's Encrypt API: REACHABLE"
         return 0
     else
-        print_warning "Cannot reach Let's Encrypt API (may be firewall/proxy issue)"
-        return 1
+        print_warning "Cannot reach Let's Encrypt API via HTTPS"
+        print_info "This could be a firewall/proxy issue or temporary outage"
+        print_info "If other checks pass, you can proceed with caution"
+        return 0  # Don't fail on this - let user decide
     fi
 }
 
@@ -237,6 +275,50 @@ check_port_accessibility() {
     return 0
 }
 
+check_acme_plugin_config() {
+    print_header "Checking ACME Plugin Configuration (Optional)"
+    
+    local plugin_file="/etc/pve/priv/acme/plugins.cfg"
+    
+    if [ ! -f "$plugin_file" ]; then
+        print_info "No ACME plugins configured yet (this is expected before setup)"
+        print_info "You'll configure this in the Proxmox web interface"
+        return 0
+    fi
+    
+    print_info "ACME plugin configuration found, checking format..."
+    
+    # Check if cloudflare plugin exists
+    if grep -q "^dns: cloudflare" "$plugin_file"; then
+        print_success "Cloudflare plugin configured"
+        
+        # Check for common configuration issues
+        local plugin_data=$(grep -A 10 "^dns: cloudflare" "$plugin_file" | grep "data:" | head -1)
+        
+        if echo "$plugin_data" | grep -q "CF_Token"; then
+            print_success "CF_Token found in configuration"
+        else
+            print_warning "CF_Token not found in plugin data"
+            print_info "Make sure API data includes: CF_Token=your_token"
+        fi
+        
+        if echo "$plugin_data" | grep -q "CF_Zone_ID"; then
+            print_success "CF_Zone_ID found in configuration"
+        else
+            print_error "CF_Zone_ID MISSING from plugin data"
+            print_info "This is likely why certificate ordering fails!"
+            print_info "Edit the plugin and add: CF_Zone_ID=your_zone_id"
+            return 1
+        fi
+        
+    else
+        print_info "Cloudflare plugin not configured yet"
+        print_info "You'll add this in Datacenter → ACME → Challenge Plugins"
+    fi
+    
+    return 0
+}
+
 #############################################################################
 # Post-Check Functions
 #############################################################################
@@ -335,18 +417,24 @@ check_auto_renewal() {
     
     # Check if ACME account exists
     if pvenode acme account list &>/dev/null; then
-        local account_count=$(pvenode acme account list | grep -c "Account")
-        if [ "$account_count" -gt 0 ]; then
+        local account_output=$(pvenode acme account list 2>/dev/null)
+        
+        # Check if there's actual account data (not just headers)
+        if echo "$account_output" | grep -qE "letsencrypt|production|staging"; then
             print_success "ACME account configured"
-            pvenode acme account list | grep -v "^$" | while IFS= read -r line; do
-                print_info "  $line"
+            # Show account details if available
+            echo "$account_output" | grep -v "^$" | while IFS= read -r line; do
+                if [ ! -z "$line" ]; then
+                    print_info "  $line"
+                fi
             done
         else
-            print_warning "No ACME account found"
-            print_info "Certificate won't auto-renew without ACME account"
+            print_warning "ACME account status unclear"
+            print_info "If certificate was issued, ACME account exists"
         fi
     else
         print_warning "Could not check ACME account status"
+        print_info "If certificate was issued, ACME account likely exists"
     fi
     
     # Check for renewal cron/timer
@@ -369,6 +457,12 @@ test_web_interface() {
     if [ -z "$PROXMOX_URL" ]; then
         print_error "URL is required"
         return 1
+    fi
+    
+    # Add https:// if not present
+    if [[ ! "$PROXMOX_URL" =~ ^https?:// ]]; then
+        PROXMOX_URL="https://$PROXMOX_URL"
+        print_info "Added https:// prefix: $PROXMOX_URL"
     fi
     
     print_info "Testing HTTP response..."
@@ -414,6 +508,7 @@ run_pre_checks() {
     validate_cloudflare_credentials || all_passed=false
     check_dns_record || all_passed=false
     check_port_accessibility || all_passed=false
+    check_acme_plugin_config || all_passed=false
     
     echo ""
     if $all_passed; then
@@ -423,7 +518,7 @@ run_pre_checks() {
         print_info ""
         print_info "Next steps:"
         print_info "  1. Follow the README to configure ACME account"
-        print_info "  2. Add Cloudflare plugin"
+        print_info "  2. Add Cloudflare plugin with BOTH CF_Token and CF_Zone_ID"
         print_info "  3. Order certificate"
         print_info "  4. Run: ./proxmox-ssl-validator.sh --post-check"
     else

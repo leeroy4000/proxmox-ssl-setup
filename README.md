@@ -163,7 +163,7 @@ This verifies:
 - Proxmox VE 6.1 or newer
 - Domain managed by Cloudflare
 - Subdomain pointing to Proxmox (e.g., `proxmox.yourdomain.com`)
-- Cloudflare API Token with DNS edit permissions
+- Cloudflare API Token with **both** Zone DNS Edit AND Zone Read permissions
 - Cloudflare Zone ID for your domain
 
 ---
@@ -175,17 +175,21 @@ Access it by opening a browser and going to: `https://YOUR_PROXMOX_IP:8006`
 
 ### Step 1: Get Cloudflare API Token
 
+**CRITICAL:** The API token must have **BOTH** permissions listed below. Missing either will cause certificate ordering to fail with "Authentication error" or "Error add txt for domain".
+
 1. Log into **Cloudflare Dashboard**
 2. Go to **My Profile** → **API Tokens**
 3. Click **Create Token**
 4. Use **Edit zone DNS** template
 5. Configure permissions:
-   - **Permissions**: 
-     - Zone → DNS → Edit
-     - Zone → Zone → Read (recommended)
+   - **Permissions** (⚠️ BOTH are REQUIRED): 
+     - Zone → DNS → Edit ✅
+     - Zone → Zone → Read ✅
    - **Zone Resources**: Include → Specific zone → `yourdomain.com`
 6. Click **Continue to summary** → **Create Token**
 7. **Copy the API token** (save it - you won't see it again!)
+
+**Already have a token?** If you created a token before reading this and only have Zone → DNS → Edit permission, you can edit the existing token in Cloudflare to add Zone → Zone → Read. The token string doesn't change, so you don't need to update anything in Proxmox after editing permissions.
 
 ---
 
@@ -388,19 +392,41 @@ One certificate with multiple domains:
 
 ## Troubleshooting
 
-### Error: "invalid domain" or "Error add txt for domain"
+### Error: "Authentication error" when ordering certificate
 
-**Problem**: Missing Zone ID or incorrect API token
+**Problem**: API token is missing Zone → Zone → Read permission
 
 **Solution**: 
-1. Verify you added **both** `CF_Token` AND `CF_Zone_ID` to the plugin
-2. Check the format in plugin data: 
+1. Log into **Cloudflare Dashboard** → **My Profile** → **API Tokens**
+2. Find your token and click **Edit**
+3. Verify permissions include **BOTH**:
+   - Zone → DNS → Edit ✅
+   - Zone → Zone → Read ✅
+4. Save changes (token string stays the same - no need to update Proxmox)
+5. Try ordering certificate again
+
+**Test your token:**
+```bash
+# This should return "success":true
+curl -X GET "https://api.cloudflare.com/client/v4/zones/YOUR_ZONE_ID" \
+  -H "Authorization: Bearer YOUR_API_TOKEN" \
+  -H "Content-Type: application/json"
+```
+
+### Error: "invalid domain" or "Error add txt for domain"
+
+**Problem**: Missing Zone ID in Proxmox plugin configuration
+
+**Solution**: 
+1. Go to **Datacenter** → **ACME** → **Challenge Plugins** → **Edit** cloudflare plugin
+2. Verify **API Data** field contains **both** lines:
    ```
    CF_Token=your_token
    CF_Zone_ID=your_zone_id
    ```
-3. Verify API token has correct permissions (Zone → DNS → Edit)
-4. Edit plugin: **Datacenter** → **ACME** → **Challenge Plugins** → **Edit**
+3. Both CF_Token AND CF_Zone_ID must be present
+4. Click **OK** to save
+5. Try ordering certificate again
 
 **Quick validation:**
 ```bash
@@ -454,11 +480,13 @@ This will test your Cloudflare credentials before you configure Proxmox.
 **Problem**: Token doesn't have required permissions
 
 **Solution**:
-1. Create new token in Cloudflare with these permissions:
+1. You can either edit your existing token OR create a new one in Cloudflare
+2. Required permissions (BOTH needed):
    - Zone → DNS → Edit ✅
    - Zone → Zone → Read ✅
-2. Scope to specific zone (your domain)
-3. Update Proxmox plugin with new token
+3. Scope to specific zone (your domain)
+4. If you edited an existing token, no need to update Proxmox (token string doesn't change)
+5. If you created a new token, update the Proxmox plugin with the new token
 
 ---
 
@@ -483,7 +511,7 @@ Only forward port 8006 if you need external access:
 ### API Token Security
 - ✅ Use **API tokens** (not Global API Key)
 - ✅ Scope tokens to **specific zones only**
-- ✅ Use **minimal permissions** needed (DNS Edit only)
+- ✅ Use **both required permissions** (DNS Edit + Zone Read)
 - ✅ Rotate tokens periodically
 
 ---
