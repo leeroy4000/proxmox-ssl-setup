@@ -71,11 +71,13 @@ check_proxmox_version() {
     fi
     
     # Get the full pveversion output
-    local pve_output=$(pveversion 2>/dev/null)
+    local pve_output
+    pve_output=$(pveversion 2>/dev/null)
     
     # Parse: "pve-manager/9.1.1/42db4a6cf33dac83 (running kernel: 6.17.2-1-pve)"
     # Extract version between / and next /
-    local pve_version=$(echo "$pve_output" | grep -oP 'pve-manager/\K[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+    local pve_version
+    pve_version=$(echo "$pve_output" | grep -oP 'pve-manager/\K[0-9]+\.[0-9]+\.[0-9]+' | head -1)
     
     # If that didn't work, try other patterns
     if [ -z "$pve_version" ]; then
@@ -91,7 +93,8 @@ check_proxmox_version() {
     fi
     
     # Extract major version number
-    local major_version=$(echo "$pve_version" | cut -d'.' -f1)
+    local major_version
+    major_version=$(echo "$pve_version" | cut -d'.' -f1)
     
     # Validate we got a number
     if ! [[ "$major_version" =~ ^[0-9]+$ ]]; then
@@ -165,17 +168,20 @@ validate_cloudflare_credentials() {
     print_info "Testing API token..."
     
     # Test the API token
-    local response=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/${CF_ZONE_ID}" \
+    local response
+    response=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/${CF_ZONE_ID}" \
         -H "Authorization: Bearer ${CF_TOKEN}" \
         -H "Content-Type: application/json")
     
-    local success=$(echo "$response" | grep -o '"success":[^,]*' | cut -d':' -f2)
+    local success
+    success=$(echo "$response" | grep -o '"success":[^,]*' | cut -d':' -f2)
     
     if [ "$success" == "true" ]; then
         print_success "API Token: VALID"
         
         # Get zone name to verify it matches
-        local zone_name=$(echo "$response" | grep -o '"name":"[^"]*"' | head -1 | cut -d'"' -f4)
+        local zone_name
+        zone_name=$(echo "$response" | grep -o '"name":"[^"]*"' | head -1 | cut -d'"' -f4)
         print_success "Zone verified: $zone_name"
         
         if [ "$zone_name" != "$DOMAIN" ]; then
@@ -185,11 +191,13 @@ validate_cloudflare_credentials() {
         
         # Test DNS edit permissions
         print_info "Testing DNS permissions..."
-        local dns_response=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/${CF_ZONE_ID}/dns_records" \
+        local dns_response
+        dns_response=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/${CF_ZONE_ID}/dns_records" \
             -H "Authorization: Bearer ${CF_TOKEN}" \
             -H "Content-Type: application/json")
         
-        local dns_success=$(echo "$dns_response" | grep -o '"success":[^,]*' | cut -d':' -f2)
+        local dns_success
+        dns_success=$(echo "$dns_response" | grep -o '"success":[^,]*' | cut -d':' -f2)
         
         if [ "$dns_success" == "true" ]; then
             print_success "DNS Edit Permission: CONFIRMED"
@@ -201,8 +209,9 @@ validate_cloudflare_credentials() {
         fi
     else
         print_error "API Token: INVALID"
-        local error_msg=$(echo "$response" | grep -o '"message":"[^"]*"' | cut -d'"' -f4)
-        if [ ! -z "$error_msg" ]; then
+        local error_msg
+        error_msg=$(echo "$response" | grep -o '"message":"[^"]*"' | cut -d'"' -f4)
+        if [ -n "$error_msg" ]; then
             print_info "Error: $error_msg"
         fi
         return 1
@@ -222,7 +231,8 @@ check_dns_record() {
     print_info "Looking up DNS record for $PROXMOX_FQDN..."
     
     # Try to resolve the DNS
-    local dns_ip=$(dig +short "$PROXMOX_FQDN" @8.8.8.8 | tail -1)
+    local dns_ip
+    dns_ip=$(dig +short "$PROXMOX_FQDN" @8.8.8.8 | tail -1)
     
     if [ -z "$dns_ip" ]; then
         print_error "DNS record not found for $PROXMOX_FQDN"
@@ -233,7 +243,8 @@ check_dns_record() {
     print_success "DNS resolves to: $dns_ip"
     
     # Get local Proxmox IP for comparison
-    local local_ip=$(hostname -I | awk '{print $1}')
+    local local_ip
+    local_ip=$(hostname -I | awk '{print $1}')
     
     if [ "$dns_ip" == "$local_ip" ]; then
         print_success "DNS matches local Proxmox IP"
@@ -293,7 +304,8 @@ check_acme_plugin_config() {
         print_success "Cloudflare plugin configured"
         
         # Check for common configuration issues
-        local plugin_data=$(grep -A 10 "^dns: cloudflare" "$plugin_file" | grep "data:" | head -1)
+        local plugin_data
+        plugin_data=$(grep -A 10 "^dns: cloudflare" "$plugin_file" | grep "data:" | head -1)
         
         if echo "$plugin_data" | grep -q "CF_Token"; then
             print_success "CF_Token found in configuration"
@@ -334,9 +346,8 @@ check_certificate_installed() {
     print_success "Certificate file exists"
     
     # Get certificate details
-    local cert_info=$(pvenode cert info 2>/dev/null)
-    
-    if [ $? -eq 0 ]; then
+    local cert_info
+    if cert_info=$(pvenode cert info 2>/dev/null); then
         print_success "Certificate info retrieved via pvenode"
         echo "$cert_info" | while IFS= read -r line; do
             print_info "  $line"
@@ -345,9 +356,12 @@ check_certificate_installed() {
         print_warning "Could not retrieve cert info via pvenode, checking file directly..."
         
         # Extract info from cert file
-        local subject=$(openssl x509 -in /etc/pve/local/pveproxy-ssl.pem -noout -subject 2>/dev/null | sed 's/subject=//')
-        local issuer=$(openssl x509 -in /etc/pve/local/pveproxy-ssl.pem -noout -issuer 2>/dev/null | sed 's/issuer=//')
-        local not_after=$(openssl x509 -in /etc/pve/local/pveproxy-ssl.pem -noout -enddate 2>/dev/null | sed 's/notAfter=//')
+        local subject
+        subject=$(openssl x509 -in /etc/pve/local/pveproxy-ssl.pem -noout -subject 2>/dev/null | sed 's/subject=//')
+        local issuer
+        issuer=$(openssl x509 -in /etc/pve/local/pveproxy-ssl.pem -noout -issuer 2>/dev/null | sed 's/issuer=//')
+        local not_after
+        not_after=$(openssl x509 -in /etc/pve/local/pveproxy-ssl.pem -noout -enddate 2>/dev/null | sed 's/notAfter=//')
         
         print_info "  Subject: $subject"
         print_info "  Issuer: $issuer"
@@ -370,15 +384,17 @@ verify_certificate_validity() {
     print_info "Testing HTTPS connection to $PROXMOX_FQDN:8006..."
     
     # Test certificate via openssl
-    local cert_check=$(echo | timeout 5 openssl s_client -servername "$PROXMOX_FQDN" -connect "$PROXMOX_FQDN:8006" 2>/dev/null | openssl x509 -noout -subject -issuer -dates 2>/dev/null)
-    
-    if [ $? -eq 0 ] && [ ! -z "$cert_check" ]; then
+    local cert_check
+    if cert_check=$(echo | timeout 5 openssl s_client -servername "$PROXMOX_FQDN" -connect "$PROXMOX_FQDN:8006" 2>/dev/null | openssl x509 -noout -subject -issuer -dates 2>/dev/null); then
         print_success "Certificate is accessible via HTTPS"
         
         # Parse certificate details
-        local subject=$(echo "$cert_check" | grep "subject=" | sed 's/subject=//')
-        local issuer=$(echo "$cert_check" | grep "issuer=" | sed 's/issuer=//')
-        local not_after=$(echo "$cert_check" | grep "notAfter=" | sed 's/notAfter=//')
+        local subject
+        subject=$(echo "$cert_check" | grep "subject=" | sed 's/subject=//')
+        local issuer
+        issuer=$(echo "$cert_check" | grep "issuer=" | sed 's/issuer=//')
+        local not_after
+        not_after=$(echo "$cert_check" | grep "notAfter=" | sed 's/notAfter=//')
         
         print_info "  Subject: $subject"
         
@@ -416,15 +432,14 @@ check_auto_renewal() {
     print_header "Checking Auto-Renewal Configuration"
     
     # Check if ACME account exists
-    if pvenode acme account list &>/dev/null; then
-        local account_output=$(pvenode acme account list 2>/dev/null)
-        
+    local account_output
+    if account_output=$(pvenode acme account list 2>/dev/null); then
         # Check if there's actual account data (not just headers)
         if echo "$account_output" | grep -qE "letsencrypt|production|staging"; then
             print_success "ACME account configured"
             # Show account details if available
             echo "$account_output" | grep -v "^$" | while IFS= read -r line; do
-                if [ ! -z "$line" ]; then
+                if [ -n "$line" ]; then
                     print_info "  $line"
                 fi
             done
@@ -468,7 +483,8 @@ test_web_interface() {
     print_info "Testing HTTP response..."
     
     # Test if we get a response (ignore cert validation for this test)
-    local http_code=$(curl -k -s -o /dev/null -w "%{http_code}" "$PROXMOX_URL" --connect-timeout 5)
+    local http_code
+    http_code=$(curl -k -s -o /dev/null -w "%{http_code}" "$PROXMOX_URL" --connect-timeout 5)
     
     if [ "$http_code" == "200" ] || [ "$http_code" == "401" ] || [ "$http_code" == "302" ]; then
         print_success "Web interface responding (HTTP $http_code)"
