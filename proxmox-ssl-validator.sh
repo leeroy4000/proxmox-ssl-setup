@@ -54,7 +54,9 @@ prompt_input() {
     local prompt="$1"
     local var_name="$2"
     echo -e -n "${BLUE}${prompt}: ${NC}"
-    read -r ${var_name}
+    local value
+    read -r value
+    printf -v "$var_name" '%s' "$value"
 }
 
 #############################################################################
