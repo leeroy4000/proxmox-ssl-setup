@@ -577,7 +577,7 @@ run_post_checks() {
 run_full_check() {
     run_pre_checks
     echo ""
-    read -p "Press Enter to continue with post-installation checks..." 
+    read -r -p "Press Enter to continue with post-installation checks..." 
     echo ""
     run_post_checks
 }
